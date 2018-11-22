@@ -9,6 +9,12 @@ import smtplib
 from email.message import EmailMessage
 from datetime import date, datetime, timedelta
 from pyad import *
+import logging
+
+# Prep for running the program
+filename = datetime.today().strftime("%Y%m%d") + ".log"
+logging.basicConfig(filename=filename, filemode='a', format='%(asctime)s - %(funcName)s - %(levelname)s - %(message)s', level=logging.INFO)
+logging.info(__file__ + " is starting.\n")
 
 # Make a fancy message
 def makeMessage(humanoid, xDays, xDate):
@@ -116,7 +122,7 @@ def makeMessage(humanoid, xDays, xDate):
 	</body>
 </html>
 """
-    print(humanoid, xDays, xDate)
+    logging.info("Human:" + humanoid + " Password will expire in " + str(xDays) + " days on " + str(xDate))
     msg = msg.replace("{humanoid}", humanoid)
     msg = msg.replace("{xDays}", str(xDays))
     msg = msg.replace("{xDate}", str(xDate))
@@ -124,12 +130,13 @@ def makeMessage(humanoid, xDays, xDate):
     
 # Send the message via our own SMTP server.
 def mailMsg(address, msg, days, humanoid):
+    logging.info("eMailing PW expiration warning message.\n")
     msg = "Content-Type: text/html;\nMime-Version: 1.0;\nTo: klacrosse@pkwillis.com\nSubject: "+ humanoid + ", your password will expire in " + str(days) + " days\n\n" + msg
     s = smtplib.SMTP('10.0.0.69')
-    s.set_debuglevel(1)
+    s.set_debuglevel(0)
     s.sendmail("pkw-reminders@pkwillis.com", "klacrosse@pkwillis.com", msg)
     s.quit()
-    print(msg)
+#    logging.info(msg)
     
 # MAIN: Query AD for delinquent passwords
 def main():
@@ -142,7 +149,7 @@ def main():
     )
     
     for row in q.get_results():
-        print (row["distinguishedName"])
+        logging.info ("Inspecting " + row["distinguishedName"])
         user1 = aduser.ADUser.from_dn(row["distinguishedName"])
         address = row["mail"] 
         pwLastSet = user1.get_password_last_set()
@@ -150,10 +157,13 @@ def main():
         uctl = user1.get_user_account_control_settings()
         pwDoesntExpire = uctl["DONT_EXPIRE_PASSWD"]
         badOU = "Computers" in row["distinguishedName"] or "SecuredProfiles" in row["distinguishedName"] or "Security Groups" in row["distinguishedName"] or "Training" in row["distinguishedName"]
+
         if badOU == False and pwDoesntExpire == False and pwAge > MAXPASSWORDAGEINDAYS-7:
            pwExpirationDate = (pwLastSet + timedelta(MAXPASSWORDAGEINDAYS)).strftime("%m/%d/%Y")
-           print (row["displayName"], ": Password is", pwAge, "days old. Password Doesn't Expire Flag is", pwDoesntExpire, "and Expires on", pwExpirationDate)
+           logging.info ("Preparing to email warning to " + row["displayName"] + ": PW is " + str(pwAge) + " days old. PW_Doesn't_Expire flag is " + str(pwDoesntExpire) + " and Expires on " + str(pwExpirationDate))
            msg = makeMessage(row["displayName"], MAXPASSWORDAGEINDAYS-pwAge, pwExpirationDate)
            mailMsg(address, msg, MAXPASSWORDAGEINDAYS-pwAge, row["displayName"])
     
-main() 
+main()
+
+logging.info(__file__ + " completed.\n")
