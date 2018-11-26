@@ -10,11 +10,15 @@ from email.message import EmailMessage
 from datetime import date, datetime, timedelta
 from pyad import *
 import logging
+from collections import deque
 
 # Prep for running the program
 filename = datetime.today().strftime("%Y%m%d") + ".log"
 logging.basicConfig(filename=filename, filemode='a', format='%(asctime)s - %(funcName)s - %(levelname)s - %(message)s', level=logging.INFO)
 logging.info(__file__ + " is starting.\n")
+
+# Create a deque
+deque = deque()
 
 # Make a fancy message
 def makeMessage(humanoid, xDays, xDate):
@@ -156,14 +160,24 @@ def main():
         pwAge = (datetime.today() - pwLastSet).days
         uctl = user1.get_user_account_control_settings()
         pwDoesntExpire = uctl["DONT_EXPIRE_PASSWD"]
-        badOU = "Computers" in row["distinguishedName"] or "SecuredProfiles" in row["distinguishedName"] or "Security Groups" in row["distinguishedName"] or "Training" in row["distinguishedName"]
+        pwDisabled = uctl["ACCOUNTDISABLE"]
+        badOU = "Computers" in row["distinguishedName"] or "SecuredProfiles" in row["distinguishedName"] or \
+                "Security Groups" in row["distinguishedName"] or "Training" in row["distinguishedName"] or "PKW7" in row["distinguishedName"]
+        pwExpirationDate = (pwLastSet + timedelta(MAXPASSWORDAGEINDAYS)).strftime("%m/%d/%Y")
 
-        if badOU == False and pwDoesntExpire == False and pwAge > MAXPASSWORDAGEINDAYS-7:
-           pwExpirationDate = (pwLastSet + timedelta(MAXPASSWORDAGEINDAYS)).strftime("%m/%d/%Y")
-           logging.info ("Preparing to email warning to " + row["displayName"] + ": PW is " + str(pwAge) + " days old. PW_Doesn't_Expire flag is " + str(pwDoesntExpire) + " and Expires on " + str(pwExpirationDate))
-           msg = makeMessage(row["displayName"], MAXPASSWORDAGEINDAYS-pwAge, pwExpirationDate)
-           mailMsg(address, msg, MAXPASSWORDAGEINDAYS-pwAge, row["displayName"])
+        if badOU == False and pwDoesntExpire == False and pwDisabled == False and pwAge > MAXPASSWORDAGEINDAYS-7:
+            if pwAge > MAXPASSWORDAGEINDAYS:
+                # push to a stack so we can report all of these at the same time at the end of the log.
+                deque.append("Found expired PW for " + row["displayName"] + ": PW is " + str(pwAge) + " days old. PW_Doesn't_Expire flag is " + str(pwDoesntExpire) + " and Expires on " + str(pwExpirationDate))
+            else:
+                logging.info ("Preparing to email warning to " + row["displayName"] + ": PW is " + str(pwAge) + " days old. PW_Doesn't_Expire flag is " + str(pwDoesntExpire) + " and Expires on " + str(pwExpirationDate))
+                msg = makeMessage(row["displayName"], MAXPASSWORDAGEINDAYS-pwAge, pwExpirationDate)
+                mailMsg(address, msg, MAXPASSWORDAGEINDAYS-pwAge, row["displayName"])
     
 main()
+
+# log all the negative pwAge entries
+for e in deque:
+    logging.warning(e)
 
 logging.info(__file__ + " completed.\n")
