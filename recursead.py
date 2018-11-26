@@ -4,11 +4,12 @@
 # Next steps: Add logging, Capture and log any errors
 
 MAXPASSWORDAGEINDAYS = 45
+VERSIONINFO = "pycursead.py 0.5 11/26/2018"
 
 import smtplib
 from email.message import EmailMessage
 from datetime import date, datetime, timedelta
-from pyad import *
+from pyad import adquery, pyadconstants, aduser
 import logging
 from collections import deque
 
@@ -123,13 +124,17 @@ def makeMessage(humanoid, xDays, xDate):
 				<o:p>&nbsp;</o:p>
 			</p>
 		</div>
-	</body>
+----------------------------------------------------------------------------------------------------------------
+<br>Process: {version}
+<br>-----------------------------------------------------------------------------------------------------------------    
+    </body>
 </html>
 """
     logging.info("Human:" + humanoid + " Password will expire in " + str(xDays) + " days on " + str(xDate))
     msg = msg.replace("{humanoid}", humanoid)
     msg = msg.replace("{xDays}", str(xDays))
     msg = msg.replace("{xDate}", str(xDate))
+    msg = msg.replace("{version}", VERSIONINFO)
     return msg;
     
 # Send the message via our own SMTP server.
