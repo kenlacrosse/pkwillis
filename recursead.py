@@ -4,9 +4,13 @@
 # Next steps: Add logging, Capture and log any errors
 
 MAXPASSWORDAGEINDAYS = 45
-VERSIONINFO = "pycursead.py 0.5 11/26/2018"
+VERSIONINFO = "pycursead.py 0.6 11/27/2018"
+SMTPSERVER = '10.0.0.69'
 
+import sys
+import socket
 import smtplib
+import traceback
 from email.message import EmailMessage
 from datetime import date, datetime, timedelta
 from pyad import adquery, pyadconstants, aduser
@@ -141,10 +145,20 @@ def makeMessage(humanoid, xDays, xDate):
 def mailMsg(address, msg, days, humanoid):
     logging.info("eMailing PW expiration warning message.\n")
     msg = "Content-Type: text/html;\nMime-Version: 1.0;\nTo: klacrosse@pkwillis.com\nSubject: "+ humanoid + ", your password will expire in " + str(days) + " days\n\n" + msg
-    s = smtplib.SMTP('10.0.0.69')
-    s.set_debuglevel(0)
-    s.sendmail("pkw-reminders@pkwillis.com", "klacrosse@pkwillis.com", msg)
-    s.quit()
+    try:
+        s = None
+        s = smtplib.SMTP(SMTPSERVER)
+        s.set_debuglevel(0)
+        s.sendmail("pkw-reminders@pkwillis.com", address, msg)
+    except socket.error as e:
+        msg = "Could not connect to " + spamTitan + ":25" + " - is it listening / up?"
+        logging.error (msg)
+        raise
+    except:
+        print ("Unknown error:", sys.exc_info()[0])
+    finally:
+        if s != None:
+            s.quit()
 #    logging.info(msg)
     
 # MAIN: Query AD for delinquent passwords
@@ -178,11 +192,23 @@ def main():
                 logging.info ("Preparing to email warning to " + row["displayName"] + ": PW is " + str(pwAge) + " days old. PW_Doesn't_Expire flag is " + str(pwDoesntExpire) + " and Expires on " + str(pwExpirationDate))
                 msg = makeMessage(row["displayName"], MAXPASSWORDAGEINDAYS-pwAge, pwExpirationDate)
                 mailMsg(address, msg, MAXPASSWORDAGEINDAYS-pwAge, row["displayName"])
-    
-main()
+
+#main()
+
+try:    
+    main()
+except:
+    etype, error_message, error_traceback = sys.exc_info()
+    s = traceback.format_tb(error_traceback)
+    s1 = ""
+    for m in s:
+        m = m.replace("<string>", __file__)
+        m = m.replace("<module>", __name__)
+        s1 = s1 + m
+    logging.error("Error: %s-%s\n%s" % (etype, error_message, s1))
 
 # log all the negative pwAge entries
 for e in deque:
-    logging.warning(e)
+   logging.warning(e)
 
 logging.info(__file__ + " completed.\n")
